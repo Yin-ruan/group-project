@@ -25,7 +25,8 @@ library(tidyverse)
 
 ```{r load-data}
 # load your data 
-
+library(readr)
+escs_trend <- read_csv("data/escs_trend/escs_trend.csv")
 
 
 
