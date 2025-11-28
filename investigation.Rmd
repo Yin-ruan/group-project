@@ -15,21 +15,878 @@ knitr::opts_chunk$set(echo = TRUE)
 
 
 ```{r load-lib, message = FALSE}
+
 library(tidyverse)
 # Add any other libraries here
-
-
+library(tidyverse)
+# Add any other libraries here
+library(tidyverse)
+# Add any other libraries here
+library(readr)
+test <- read_csv("data/house-prices-advanced-regression-techniques/test.csv")
+train <- read_csv("~/group-project/data/house-prices-advanced-regression-techniques/train.csv")
+sample_submission <- read_csv("~/group-project/data/house-prices-advanced-regression-techniques/sample_submission.csv")
 
 ```
 
 
 ```{r load-data}
 # load your data 
-library(readr)
-escs_trend <- read_csv("data/escs_trend/escs_trend.csv")
+# load your data here and any pre-processing/cleaning 
+#  that you need for your report.
+
+#检查数据类型
+str(train)
+
+#检查每个variable当中有几个缺失值
+colSums(is.na(train))
+colMeans(is.na(train))
 
 
 
+#处理缺失值
+train <- train %>%
+  mutate(
+  
+    Alley       = ifelse(is.na(Alley),       "NoAlley",     Alley),
+    Fence       = ifelse(is.na(Fence),       "NoFence",     Fence),
+    MiscFeature = ifelse(is.na(MiscFeature), "None",        MiscFeature),
+
+   
+    PoolQC      = ifelse(is.na(PoolQC),      "NoPool",      PoolQC),
+
+    FireplaceQu = ifelse(is.na(FireplaceQu), "NoFireplace", FireplaceQu),
+
+    
+    BsmtQual     = ifelse(is.na(BsmtQual),     "NoBsmt", BsmtQual),
+    BsmtCond     = ifelse(is.na(BsmtCond),     "NoBsmt", BsmtCond),
+    BsmtExposure = ifelse(is.na(BsmtExposure), "NoBsmt", BsmtExposure),
+    BsmtFinType1 = ifelse(is.na(BsmtFinType1), "NoBsmt", BsmtFinType1),
+    BsmtFinType2 = ifelse(is.na(BsmtFinType2), "NoBsmt", BsmtFinType2),
+
+
+    GarageType   = ifelse(is.na(GarageType),   "NoGarage", GarageType),
+    GarageFinish = ifelse(is.na(GarageFinish), "NoGarage", GarageFinish),
+    GarageQual   = ifelse(is.na(GarageQual),   "NoGarage", GarageQual),
+    GarageCond   = ifelse(is.na(GarageCond),   "NoGarage", GarageCond),
+
+  
+    GarageYrBlt = ifelse(is.na(GarageYrBlt), YearBuilt, GarageYrBlt),
+
+   
+    MasVnrType = ifelse(is.na(MasVnrType), "None", MasVnrType),
+    MasVnrArea = ifelse(is.na(MasVnrArea), 0,      MasVnrArea),
+
+
+    Electrical = ifelse(is.na(Electrical), "standard circuit Breakers", Electrical),
+
+
+    LotFrontage = ifelse(
+      is.na(LotFrontage),
+      median(LotFrontage, na.rm = TRUE),
+      LotFrontage
+    )
+  )
+#1.解决问题一哪个neighborhood的房价最高
+ne_summary <- train %>%
+  group_by(Neighborhood) %>%
+  summarise(
+    n_house      = n(),                     
+    mean_price   = mean(SalePrice),              median_price = median(SalePrice)         
+    ) %>%
+  arrange(desc(mean_price))                  
+ne_summary
+
+
+
+top5_mean <- ne_summary %>%
+  slice(1:5)
+
+top5_mean
+
+
+top5_median <- ne_summary %>%
+  arrange(desc(median_price)) %>%
+  slice(1:5)
+
+top5_median
+
+
+#图片添加1
+top10_ne <- ne_summary %>%
+  arrange(desc(mean_price)) %>%
+  slice(1:10)
+
+ggplot(top10_ne, aes(x = reorder(Neighborhood, mean_price),
+                     y = mean_price)) +
+  geom_col() +
+  coord_flip() +
+  labs(
+    title = "Top 10 Neighborhoods by Mean SalePrice",
+    x = "Neighborhood",
+    y = "Mean SalePrice"
+  ) +
+  theme_minimal()
+
+
+
+
+ggplot(train, aes(x = Neighborhood, y = SalePrice)) +
+  geom_boxplot() +
+  coord_flip() + 
+  labs(
+    title = "SalePrice Distribution by Neighborhood",
+    x = "Neighborhood",
+    y = "SalePrice"
+  )
+
+
+
+
+
+train <- train %>%
+  mutate(SalePrice_log = log(SalePrice))
+
+ggplot(train, aes(x = Neighborhood, y = SalePrice_log)) +
+  geom_boxplot() +
+  coord_flip() +
+  labs(
+    title = "log(SalePrice) Distribution by Neighborhood",
+    x = "Neighborhood",
+    y = "log(SalePrice)"
+  )
+
+
+model_ne_full <- lm(
+  SalePrice_log ~ Neighborhood + GrLivArea + TotalBsmtSF +GarageArea + OverallQual + YearBuilt,
+  data = train
+)
+model_ne_full 
+
+
+
+coef_df <- tibble(
+  term     = names(coef(model_ne_full)),
+  estimate = as.numeric(coef(model_ne_full))
+)
+
+
+
+coef_df <- tibble(
+  term     = names(coef(model_ne_full)),
+  estimate = as.numeric(coef(model_ne_full))
+)
+
+
+ne_rank <- coef_df %>%
+  filter(startsWith(term, "Neighborhood")) %>%
+  mutate(estimate=(exp(estimate)-1)*100)%>%
+  arrange(desc(estimate))
+ 
+ne_rank_plot <- ne_rank %>%
+  mutate(
+    Neighborhood = str_remove(term, "Neighborhood"),
+    Neighborhood = str_replace(Neighborhood, "^", "") 
+  )
+
+ggplot(ne_rank_plot,
+       aes(x = reorder(Neighborhood, estimate),
+           y = estimate)) +
+  geom_col() +
+  coord_flip() +
+  labs(
+    title = "Neighborhood Effect on SalePrice (Controlled for Other Variables)",
+    x = "Neighborhood",
+    y = "Price Change vs Baseline (%)"
+  ) +
+  theme_minimal()
+
+
+
+
+
+
+
+
+#问题2.按照年份分组之后分别探究在不控制变量和控制变量的前提下哪个时间段建造房屋的价格最贵
+library(dplyr)
+library(ggplot2)
+
+# 1. 按建造年份分组
+train <- train %>%
+  mutate(
+    YearGroup = case_when(
+      YearBuilt < 1980              ~ "Old",
+      YearBuilt >= 1980 & YearBuilt < 2000 ~ "Mid",
+      YearBuilt >= 2000             ~ "New"
+    )
+  )
+
+# 2. 按年代组汇总房价
+year_summary <- train %>%
+  group_by(YearGroup) %>%
+  summarise(
+    n_house      = n(),
+    mean_price   = mean(SalePrice, na.rm = TRUE),
+    median_price = median(SalePrice, na.rm = TRUE)
+  ) %>%
+  arrange(desc(mean_price))
+
+year_summary
+
+
+# 各年代组房屋数量统计
+year_count <- train %>%
+  group_by(YearGroup) %>%
+  summarise(
+    n_house = n()
+  )
+
+year_count
+
+# 柱状图：不同年代的房子数量
+ggplot(year_count,
+       aes(x = YearGroup, y = n_house)) +
+  geom_col() +
+  labs(
+    title = "Number of Houses by Year Group",
+    x = "Year Group",
+    y = "Number of Houses"
+  ) +
+  theme_minimal()
+
+
+# 3. 箱线图：不同年代房子的价格分布
+ggplot(train, aes(x = YearGroup, y = SalePrice)) +
+  geom_boxplot() +
+  labs(
+    title = "SalePrice by Year Group",
+    x = "Year Group",
+    y = "SalePrice"
+  )
+
+train <- train %>%
+  mutate(SalePrice_log = log(SalePrice))
+
+model_year <- lm(
+  SalePrice_log ~ YearGroup + GrLivArea + OverallQual +
+    TotalBsmtSF + GarageArea,
+  data = train
+)
+train
+summary(model_year)
+
+
+coefs_year <- coef(model_year)
+
+
+
+coef_year_df <- tibble(
+  term     = names(coef(model_year)),
+  estimate = as.numeric(coef(model_year))
+)
+
+year_effect <- coef_year_df %>%
+ 
+  filter(startsWith(term, "YearGroup")) %>%
+
+  mutate(
+    estimate = (exp(estimate) - 1) * 100   # 
+  ) %>%
+  arrange(desc(estimate))  
+
+year_effect
+
+
+library(tidymodels)
+
+set.seed(2024)
+hp_folds <- vfold_cv(hp_train, v = 5)
+
+hp_fit_rs <- hp_wflow %>%
+  fit_resamples(
+    resamples = hp_folds,
+    metrics = metric_set(roc_auc, accuracy),
+    control = control_resamples(save_pred = TRUE)
+  )
+
+collect_metrics(hp_fit_rs)
+
+
+
+
+
+
+
+
+
+
+
+#问题三：找到一个能够预测房价是高还是低的模型（超过中位数是高低于中位数是低）
+
+library(tidyverse)
+library(tidymodels)
+
+
+price_median <- median(train$SalePrice, na.rm = TRUE)
+
+train_hp <- train %>%
+  mutate(
+    HighPrice = if_else(SalePrice > price_median, "high", "low"),
+    HighPrice = factor(HighPrice, levels = c("low", "high"))
+  )
+
+table(train_hp$HighPrice)
+
+
+set.seed(1133)
+hp_split <- initial_split(train_hp, prop = 0.8, strata = HighPrice)
+hp_train <- training(hp_split)
+hp_test  <- testing(hp_split)
+
+
+
+train_hp %>%
+  count(HighPrice, Street)
+train_hp %>%
+  count(HighPrice, Alley)
+train_hp %>%
+  count(HighPrice, LandContour)
+train_hp %>%
+  count(HighPrice, Utilities)
+train_hp %>%
+  count(HighPrice, LandSlope)
+train_hp %>%
+  count(HighPrice, Condition2)
+train_hp %>%
+  count(HighPrice, RoofMatl)
+train_hp %>%
+  count(HighPrice, BsmtCond)
+train_hp %>%
+  count(HighPrice, BsmtFinType2)
+train_hp %>%
+  count(HighPrice, BsmtFinSF2)
+train_hp %>%
+  count(HighPrice, Heating)
+train_hp %>%
+  count(HighPrice, LowQualFinSF)
+train_hp %>%
+  count(HighPrice, KitchenAbvGr)
+train_hp %>%
+  count(HighPrice, `3SsnPorch`)
+train_hp %>%
+  count(HighPrice, ScreenPorch)
+train_hp %>%
+  count(HighPrice, MiscFeature)
+train_hp %>%
+  count(HighPrice, MiscVal)
+
+hp_rec <- recipe(
+  HighPrice ~ OverallQual + OverallCond +
+    GrLivArea + TotalBsmtSF + BsmtFinSF1 + BsmtExposure +
+    GarageArea + GarageQual +
+    LotArea +
+    KitchenQual + FullBath + HalfBath +
+    ExterQual + ExterCond +
+    YearBuilt + YearRemodAdd +
+    `1stFlrSF` + `2ndFlrSF`,
+  data = hp_train
+) %>%
+  step_dummy(all_nominal(), -all_outcomes()) %>%  
+  step_zv(all_predictors())                      
+
+summary(hp_rec)
+
+
+hp_mod <- logistic_reg() %>%
+  set_engine("glm")
+
+hp_wflow <- workflow() %>%
+  add_model(hp_mod) %>%
+  add_recipe(hp_rec)
+
+
+hp_fit <- hp_wflow %>%
+  fit(data = hp_train)
+
+
+tidy(hp_fit)
+
+
+hp_pred <- predict(hp_fit, new_data = hp_test, type = "prob") %>%
+  bind_cols(hp_test %>% select(HighPrice))
+
+head(hp_pred)
+
+
+hp_pred %>%
+  roc_curve(
+    truth       = HighPrice,
+    .pred_high,
+    event_level = "second"   # 因为 levels = c("low","high")
+  ) %>%
+  autoplot()
+
+
+hp_pred %>%
+  roc_auc(
+    truth       = HighPrice,
+    .pred_high,
+    event_level = "second"
+  )
+
+
+
+
+
+library(tidyverse)
+
+
+train_num <- train %>%
+  select(where(is.numeric))
+
+corr_mat <- cor(train_num, use = "pairwise.complete.obs")
+
+
+corr_df <- corr_mat %>%
+  as.data.frame() %>%
+  rownames_to_column(var = "var1") %>%
+  pivot_longer(
+    cols = -var1,
+    names_to = "var2",
+    values_to = "corr"
+  )
+
+
+
+
+
+
+# 每年平均房价
+year_price <- train %>%
+  group_by(YearBuilt) %>%
+  summarise(
+    n_house    = n(),
+    mean_price = mean(SalePrice, na.rm = TRUE)
+  )
+
+
+
+ggplot(year_price,
+       aes(x = YearBuilt, y = mean_price)) +
+  geom_line() +
+  geom_smooth(se = FALSE, linetype = "dashed") +
+  scale_x_continuous(
+    breaks = seq(1870, 2010, by = 10),
+    limits = c(1870, 2010)
+  ) +
+  labs(
+    title = "Average SalePrice by Year Built",
+    x = "Year Built",
+    y = "Mean SalePrice"
+  ) +
+  theme_minimal()
+
+
+
+
+
+library(tidyverse)
+library(rsample)
+library(broom)
+library(infer)  
+set.seed(1234)
+
+
+hp_boot <- bootstraps(train, times = 1000)
+
+
+hp_models <- hp_boot %>%
+  mutate(
+    model = map(
+      splits,
+      ~ lm(
+        SalePrice ~ GrLivArea + OverallQual +
+          TotalBsmtSF + GarageArea + YearBuilt,
+        data = analysis(.x)
+      )
+    ),
+    coef_info = map(model, tidy)
+  )
+
+
+hp_coefs <- hp_models %>%
+  unnest(coef_info)
+
+
+hp_coefs %>%
+  filter(term == "GrLivArea") %>%
+  ggplot(aes(estimate)) +
+  geom_histogram(binwidth = 5,  
+                 alpha = 0.7,
+                 fill  = "gray") +
+  labs(
+    title = "Slopes of bootstrap samples for GrLivArea",
+    x = "Slope estimate (dollars per sq ft)",
+    y = "count"
+  ) +
+  theme_minimal()
+
+
+hp_ci_all <- int_pctl(hp_models, coef_info)
+
+hp_ci_all
+
+grliv_ci <- hp_ci_all %>%
+  filter(term == "GrLivArea")
+
+grliv_ci
+#在 95% 的置信水平下，在控制其他变量不变的情况下，每增加 1 平方英尺居住面积，房价平均会上涨约 $38.97 到 $63.28。换句话说，每增加 100 平方英尺，房价平均上涨约 $3,897 到 $6,328。
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+library(dplyr)
+library(ggplot2)
+library(stringr)
+
+
+ne_labels <- c(
+  "Blmngtn" = "Bloomington Heights",
+  "Blueste" = "Bluestem",
+  "BrDale"  = "Briardale",
+  "BrkSide" = "Brookside",
+  "ClearCr" = "Clear Creek",
+  "CollgCr" = "College Creek",
+  "Crawfor" = "Crawford",
+  "Edwards" = "Edwards",
+  "Gilbert" = "Gilbert",
+  "IDOTRR"  = "Iowa DOT and Rail Road",
+  "MeadowV" = "Meadow Village",
+  "Mitchel" = "Mitchell",
+  "NAmes"   = "North Ames",
+  "NoRidge" = "Northridge",
+  "NPkVill" = "Northpark Villa",
+  "NridgHt" = "Northridge Heights",
+  "NWAmes"  = "Northwest Ames",
+  "OldTown" = "Old Town",
+  "SWISU"   = "South & West of ISU",
+  "Sawyer"  = "Sawyer",
+  "SawyerW" = "Sawyer West",
+  "Somerst" = "Somerset",
+  "StoneBr" = "Stone Brook",
+  "Timber"  = "Timberland",
+  "Veenker" = "Veenker"
+)
+
+train <- train %>%
+  mutate(
+    Neighborhood_full = recode(Neighborhood, !!!ne_labels)
+  )
+
+
+ne_summary <- train %>%
+  group_by(Neighborhood, Neighborhood_full) %>% 
+  summarise(
+    n_house      = n(),
+    mean_price   = mean(SalePrice),
+    median_price = median(SalePrice),
+    .groups = "drop"
+  ) %>%
+  arrange(desc(mean_price)) %>%
+  relocate(Neighborhood_full, .before = Neighborhood)  
+
+ne_summary      
+
+
+ne_summary %>% slice(1)
+
+# Top 5 by mean & median -------------------------------------------------
+top5_mean <- ne_summary %>%
+  arrange(desc(mean_price)) %>%
+  slice(1:5)
+
+top5_mean          
+
+top5_median <- ne_summary %>%
+  arrange(desc(median_price)) %>%
+  slice(1:5)
+
+top5_median      
+
+
+top10_ne <- ne_summary %>%
+  arrange(desc(mean_price)) %>%
+  slice(1:10)
+
+
+
+ggplot(top10_ne,
+       aes(x = reorder(Neighborhood_full, mean_price),
+           y = mean_price)) +
+  geom_col() +
+  coord_flip() +
+  labs(
+    title = "Top 10 Neighborhoods by Mean SalePrice",
+    x = "Neighborhood (Full Name)",
+    y = "Mean SalePrice"
+  ) +
+  theme_minimal()
+
+ggplot(train, aes(x = Neighborhood_full, y = SalePrice)) +
+  geom_boxplot() +
+  coord_flip() +
+  labs(
+    title = "SalePrice Distribution by Neighborhood",
+    x = "Neighborhood (Full Name)",
+    y = "SalePrice"
+  )
+
+
+train <- train %>%
+  mutate(SalePrice_log = log(SalePrice))
+
+ggplot(train, aes(x = Neighborhood_full, y = SalePrice_log)) +
+  geom_boxplot() +
+  coord_flip() +
+  labs(
+    title = "log(SalePrice) Distribution by Neighborhood",
+    x = "Neighborhood (Full Name)",
+    y = "log(SalePrice)"
+  )
+
+
+model_ne_full <- lm(
+  SalePrice_log ~ Neighborhood + GrLivArea + TotalBsmtSF +
+    GarageArea + OverallQual + YearBuilt,
+  data = train
+)
+
+summary(model_ne_full)
+
+
+coef_df <- tibble(
+  term     = names(coef(model_ne_full)),
+  estimate = as.numeric(coef(model_ne_full))
+)
+
+ne_rank <- coef_df %>%
+  filter(startsWith(term, "Neighborhood")) %>%
+  mutate(
+    estimate = (exp(estimate) - 1) * 100 
+  ) %>%
+  arrange(desc(estimate)) %>%
+  mutate(
+    Neighborhood = str_remove(term, "Neighborhood"),
+    Neighborhood = str_replace(Neighborhood, "^", ""),
+    Neighborhood_full = recode(Neighborhood, !!!ne_labels)
+  ) %>%
+  relocate(Neighborhood_full, .before = Neighborhood) 
+
+ne_rank    
+
+ne_rank_plot <- ne_rank
+
+ggplot(ne_rank_plot,
+       aes(x = reorder(Neighborhood_full, estimate),
+           y = estimate)) +
+  geom_col() +
+  coord_flip() +
+  labs(
+    title = "Neighborhood Effect on SalePrice (Controlled for Other Variables)",
+    x = "Neighborhood (Full Name)",
+    y = "Price Change vs Baseline (%)"
+  ) +
+  theme_minimal()
+
+
+library(dplyr)
+library(ggplot2)
+library(stringr)
+library(scales)
+
+
+options(scipen = 999)
+
+
+
+ne_labels <- c(
+  "Blmngtn" = "Bloomington Heights",
+  "Blueste" = "Bluestem",
+  "BrDale"  = "Briardale",
+  "BrkSide" = "Brookside",
+  "ClearCr" = "Clear Creek",
+  "CollgCr" = "College Creek",
+  "Crawfor" = "Crawford",
+  "Edwards" = "Edwards",
+  "Gilbert" = "Gilbert",
+  "IDOTRR"  = "Iowa DOT and Rail Road",
+  "MeadowV" = "Meadow Village",
+  "Mitchel" = "Mitchell",
+  "NAmes"   = "North Ames",
+  "NoRidge" = "Northridge",
+  "NPkVill" = "Northpark Villa",
+  "NridgHt" = "Northridge Heights",
+  "NWAmes"  = "Northwest Ames",
+  "OldTown" = "Old Town",
+  "SWISU"   = "South & West of ISU",
+  "Sawyer"  = "Sawyer",
+  "SawyerW" = "Sawyer West",
+  "Somerst" = "Somerset",
+  "StoneBr" = "Stone Brook",
+  "Timber"  = "Timberland",
+  "Veenker" = "Veenker"
+)
+
+train <- train %>%
+  mutate(
+    Neighborhood_full = recode(Neighborhood, !!!ne_labels),
+    SalePrice_log     = log(SalePrice)
+  )
+
+
+
+ne_summary <- train %>%
+  group_by(Neighborhood, Neighborhood_full) %>% 
+  summarise(
+    n_house      = n(),
+    mean_price   = mean(SalePrice),
+    median_price = median(SalePrice),
+    .groups = "drop"
+  ) %>%
+  arrange(desc(mean_price)) %>%
+  relocate(Neighborhood_full, .before = Neighborhood)
+
+# 查看哪个小区均价最高
+ne_summary %>% slice(1)
+
+# Top5（均价）
+top5_mean <- ne_summary %>%
+  arrange(desc(mean_price)) %>%
+  slice(1:5)
+
+# Top5（中位数）
+top5_median <- ne_summary %>%
+  arrange(desc(median_price)) %>%
+  slice(1:5)
+
+
+
+top10_ne <- ne_summary %>%
+  arrange(desc(mean_price)) %>%
+  slice(1:10)
+
+ggplot(top10_ne,
+       aes(x = reorder(Neighborhood_full, mean_price),
+           y = mean_price)) +
+  geom_col() +
+  coord_flip() +
+  scale_y_continuous(labels = scales::comma) +  
+  labs(
+    title = "Top 10 Neighborhoods by Mean SalePrice",
+    x = "Neighborhood (Full Name)",
+    y = "Mean SalePrice"
+  ) +
+  theme_minimal()
+
+
+
+ggplot(train, aes(x = Neighborhood_full, y = SalePrice)) +
+  geom_boxplot() +
+  coord_flip() +
+  scale_y_continuous(labels = scales::comma) +
+  labs(
+    title = "SalePrice Distribution by Neighborhood",
+    x = "Neighborhood (Full Name)",
+    y = "SalePrice"
+  ) +
+  theme_minimal()
+
+
+ggplot(train, aes(x = Neighborhood_full, y = SalePrice_log)) +
+  geom_boxplot() +
+  coord_flip() +
+  scale_y_continuous(labels = scales::label_number(accuracy = 0.01)) +
+  labs(
+    title = "log(SalePrice) Distribution by Neighborhood",
+    x = "Neighborhood (Full Name)",
+    y = "log(SalePrice)"
+  ) +
+  theme_minimal()
+
+
+
+model_ne_full <- lm(
+  SalePrice_log ~ Neighborhood + GrLivArea + TotalBsmtSF +
+    GarageArea + OverallQual + YearBuilt,
+  data = train
+)
+
+summary(model_ne_full)
+
+
+
+
+coef_df <- tibble(
+  term     = names(coef(model_ne_full)),
+  estimate = as.numeric(coef(model_ne_full))
+)
+
+ne_rank <- coef_df %>%
+  filter(startsWith(term, "Neighborhood")) %>%
+  mutate(
+    estimate = (exp(estimate) - 1) * 100,   
+    Neighborhood = str_remove(term, "Neighborhood"),
+    Neighborhood = str_replace(Neighborhood, "^", ""),
+    Neighborhood_full = recode(Neighborhood, !!!ne_labels)
+  ) %>%
+  arrange(desc(estimate)) %>%
+  relocate(Neighborhood_full, .before = Neighborhood)
+
+
+
+ggplot(ne_rank,
+       aes(x = reorder(Neighborhood_full, estimate),
+           y = estimate)) +
+  geom_col() +
+  coord_flip() +
+  scale_y_continuous(labels = scales::label_number(accuracy = 0.1)) +
+  labs(
+    title = "Neighborhood Effect on SalePrice (Controlled for Other Variables)",
+    x = "Neighborhood (Full Name)",
+    y = "Price Change vs Baseline (%)"
+  ) +
+  theme_minimal()
+
+
+
+top5_mean <- ne_summary %>%
+  arrange(desc(mean_price)) %>%
+  slice(1:5)
+
+top5_median <- ne_summary %>%
+  arrange(desc(median_price)) %>%
+  slice(1:5)
+
+top10_ne <- ne_summary %>%
+  arrange(desc(mean_price)) %>%
+  slice(1:10)
+
+
+  
 ```
+
 
 
